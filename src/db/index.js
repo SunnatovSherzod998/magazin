@@ -18,6 +18,29 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { hashPassword } = require('../lib/crypto');
 
+// .env va .env.local fayllaridan muhit parametrlarini avtomatik yuklash
+for (const envFile of ['.env', '.env.local']) {
+  const envPath = path.join(__dirname, '..', '..', envFile);
+  if (fs.existsSync(envPath)) {
+    try {
+      const content = fs.readFileSync(envPath, 'utf8');
+      for (const line of content.split(/\r?\n/)) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const eq = trimmed.indexOf('=');
+        if (eq > 0) {
+          const key = trimmed.slice(0, eq).trim();
+          let val = trimmed.slice(eq + 1).trim();
+          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+            val = val.slice(1, -1);
+          }
+          if (!process.env[key]) process.env[key] = val;
+        }
+      }
+    } catch { /* skip */ }
+  }
+}
+
 const DATA_DIR = process.env.OMBOR_DATA_DIR
   || (process.env.VERCEL ? '/tmp/ombor' : path.join(__dirname, '..', '..', 'data'));
 const DB_FILE = process.env.OMBOR_DB || path.join(DATA_DIR, 'ombor.db');
@@ -68,13 +91,15 @@ function initDriver() {
     drv = {
       kind: 'postgres',
       exec: async (sql) => { await pool.query(sql); },
-      all: async (sql, p) => {
+      all: async (sql, p = []) => {
+        const params = Array.isArray(p) ? p : [p];
         const { sql: q, count } = toPg(sql);
         if (count !== p.length) throw new Error(`SQL parametr soni mos emas (${count} vs ${p.length}): ${sql.slice(0, 80)}`);
         const r = await pool.query(q, p);
         return r.rows;
       },
-      run: async (sql, p) => {
+      run: async (sql, p = []) => {
+        const params = Array.isArray(p) ? p : [p];
         let q = sql;
         // INSERT ... RETURNING id (Postgres ID qaytarish uchun)
         if (/^\s*INSERT\s+INTO/i.test(sql) && !/RETURNING/i.test(sql) && !/ON\s+CONFLICT/i.test(sql)) {
@@ -243,7 +268,7 @@ async function migrateColumns() {
     if (d.kind === 'postgres') {
       const r = await d.all(
         `SELECT column_name FROM information_schema.columns
-          WHERE table_name = ? AND column_name = ?`, table, column);
+          WHERE table_name = ? AND column_name = ?`, [table, column]);
       exists = r.length > 0;
     } else {
       const cols = await all(`PRAGMA table_info(${table})`);

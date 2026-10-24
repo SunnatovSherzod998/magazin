@@ -1,0 +1,1 @@
+const { Pool } = require('pg'); // Reset Supabase/Postgres schema and re-initialize the app DB with admin user 'admin' / 'admin'. // This script is meant to be run once. // Ensure SUPABASE_DATABASE_URL is set in the environment (it is already defined in .env). (Recommended)

@@ -31,16 +31,16 @@ const ok = (cond, msg) => {
     ['admin', 'PW_SHORT', 'juda qisqa parol (5 belgi)'],
     ['1234567890', 'PW_SHORT', '10 belgili parol'],
     ['123456789012', 'PW_ONLY_DIGITS', 'faqat sonlardan iborat'],
-    ['a1b2c3d45678', 'PW_UPPERCASE', 'katta harfsiz'],
-    ['a1b2c3d4e5f6', 'PW_UPPERCASE', 'faqat kichik harflar bilan'],
-    ['A1b2C3d45678', 'PW_OK', 'aralash katta/kichik harflar'],
-    ['aB2c3D456789', 'PW_OK', 'aralash harflar'],
-    ['A1B2C3D45678', 'PW_OK', '8 son + 4 katta harf (12 belgi)'],
-    ['12345678ABCD', 'PW_OK', '8 son + 4 katta harf'],
-    ['A1B2C3D456789', 'PW_OK', '9 son + 4 katta harf (13 belgi)'],
-    ['1234567890AB', 'PW_COMPOSITION', '10 son + 2 harf (sonlar ko‘p)'],
-    ['A1B2C3D4EFGH', 'PW_COMPOSITION', 'harflar ko‘p'],
-    ['A1B2C3D4567!', 'PW_COMPOSITION', '7 son + 4 harf + 1 belgi'],
+    ['abcdefgh1234', 'PW_UPPERCASE', 'katta harfsiz'],
+    ['Abcdefgh1234', 'PW_UPPERCASE', 'faqat 1 ta katta harf'],
+    ['ABcdefgh1234', 'PW_UPPERCASE', 'faqat 2 ta katta harf'],
+    ['ABCdefgh1234', 'PW_OK', '3 ta katta harf + 5 kichik harf + 4 son (12 belgi: 67% harf, 33% son)'],
+    ['ABCDefgh1234', 'PW_OK', '4 ta katta harf + 4 kichik harf + 4 son (12 belgi: 67% harf, 33% son)'],
+    ['ABCdefgh12345', 'PW_OK', '8 harf + 5 son (13 belgi: ~62% harf, ~38% son)'],
+    ['ABCDEFGHI123', 'PW_OK', '9 harf + 3 son (12 belgi: 75% harf, 25% son - oraliqda)'],
+    ['12345678ABCD', 'PW_COMPOSITION', '8 son + 4 harf (sonlar ko‘p, 67% son)'],
+    ['ABCDEFGHIJKL', 'PW_COMPOSITION', 'faqat harflar (sonlar yo‘q)'],
+    ['ABCdef1234567', 'PW_COMPOSITION', '6 harf + 7 son (13 belgida sonlar ko‘p: 54% son)'],
   ];
 
   for (const [pw, code, note] of cases) {
@@ -50,12 +50,12 @@ const ok = (cond, msg) => {
   }
 
   console.log('\n== Boshqa til va matn ==');
-  const r = analyzePassword('A1B2C3D45678');
+  const r = analyzePassword('ABCdefgh1234');
   ok(r.ok === true, 'mashhur parol qabul qilinadi');
   ok(typeof r.uz === 'string' && r.uz.length > 10, 'o‘zbekcha xabar bor');
   ok(typeof r.ru === 'string' && r.ru.length > 10, 'ruscha xabar bor');
-  ok(r.digits === 8 && r.others === 4, 'barcha belgilar hisoblandi');
-  ok(r.minDigits === 8 && r.maxDigits === 9, '12 belgi uchun ruxsat: 8–9 son');
+  ok(r.digits === 4 && r.others === 8, 'barcha belgilar hisoblandi (4 son, 8 harf)');
+  ok(r.minDigits === 3 && r.maxDigits === 5, '12 belgi uchun ruxsat: 3–5 son');
 
   console.log('\n== Server tomoni (400 xatosi) ==');
   let code = null;
@@ -67,16 +67,16 @@ const ok = (cond, msg) => {
   ok(code === 'PW_SHORT', 'server qisqa parol uchun 400 qaytaradi');
 
   code = null;
-  try { await assertPassword('a1b2c3d45678'); } catch (e) { code = e.code; }
+  try { await assertPassword('abcdefgh1234'); } catch (e) { code = e.code; }
   ok(code === 'PW_UPPERCASE', 'server katta harfsiz parol uchun 400 qaytaradi');
 
-  let thrown = null;
-  try { await assertPassword('A1B2C3D45678'); } catch (e) { thrown = e; }
-  ok(thrown === null, 'server to‘g‘ri parolni qabul qiladi');
+  code = null;
+  try { await assertPassword('ABcdefgh1234'); } catch (e) { code = e.code; }
+  ok(code === 'PW_UPPERCASE', 'server 2 ta katta harfli parol uchun 400 qaytaradi');
 
-  thrown = null;
-  try { await assertPassword('A1b2C3d45678'); } catch (e) { thrown = e; }
-  ok(thrown === null, 'server aralash katta/kichik harfli parolni qabul qiladi');
+  let thrown = null;
+  try { await assertPassword('ABCdefgh1234'); } catch (e) { thrown = e; }
+  ok(thrown === null, 'server to‘g‘ri parolni qabul qiladi');
 
   console.log(fail ? `\n${fail} ta xato\n` : '\nParol siyosati to‘g‘ri\n');
   process.exit(fail ? 1 : 0);

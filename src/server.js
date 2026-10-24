@@ -31,7 +31,10 @@ init()
       console.log('  ╚══════════════════════════════════════════════════╝');
       console.log(`   Server:    ${base}`);
       console.log(`   Ma'lumot:  ${db.DB_FILE}`);
-      console.log(`   Saqlash:   ${db.isRemote() ? 'Turso (bulut)' : 'lokal fayl'}`);
+      const storageLabel = db.driver() === 'postgres'
+        ? 'Supabase (PostgreSQL)'
+        : (db.isRemote() ? 'Turso (bulut)' : 'lokal fayl');
+      console.log(`   Saqlash:   ${storageLabel}`);
       console.log(`   Node.js:   ${process.version}`);
       console.log('');
       console.log('   Login:  admin  /  admin');

@@ -6,17 +6,22 @@
  *   • server:   await import('../../public/js/password.mjs')  (src/lib/password.js)
  *
  * Qoidalar:
- *   1) kamida 12 ta belgi                    (минимум 12 символов)
- *   2) faqat sonlardan iborat bo'lmasligi    (не только цифры)
- *   3) kamida bitta KATTA harf bo'lishi      (минимум одна заглавная буква)
- *   4) tarkib: ~70% sonlar, ~30% harf va belgilar (±1 belgi)
- *      (состав: ~70% цифр, ~30% букв и символов, допуск ±1 символ)
+ *   1) kamida 12 ta belgi                     (минимум 12 символов)
+ *   2) faqat sonlardan iborat bo'lmasligi     (не только цифры)
+ *   3) kamida 3 ta KATTA harf bo'lishi        (минимум 3 заглавные буквы)
+ *   4) tarkib: ~60–70% harf va belgilar, ~30–40% sonlar
+ *      (состав: ~60–70% букв и символов, ~30–40% цифр)
  */
 
 export const MIN_LENGTH = 12;
-export const DIGIT_TARGET = 0.70;   // 70% sonlar / 70% цифр
-export const OTHER_TARGET = 0.30;   // 30% harf va belgilar / 30% букв и символов
-export const TOLERANCE = 1;         // ±1 belgi / ±1 символ
+export const MIN_UPPER = 3;         // kamida 3 ta katta harf / минимум 3 заглавные буквы
+export const DIGIT_MIN_TARGET = 0.30;   // ~30% sonlar / ~30% цифр
+export const DIGIT_MAX_TARGET = 0.40;   // ~40% sonlar / ~40% цифр
+export const OTHER_MIN_TARGET = 0.60;   // ~60% harf va belgilar / ~60% букв и символов
+export const OTHER_MAX_TARGET = 0.70;   // ~70% harf va belgilar / ~70% букв и символов
+export const DIGIT_TARGET = 0.35;   // o'rtacha ko'rsatkich
+export const OTHER_TARGET = 0.65;   // o'rtacha ko'rsatkich
+export const TOLERANCE = 1;         // ±1 belgi ruxsat / допуск ±1 символ
 
 const RE_DIGIT = /\p{Nd}/u;
 const RE_UPPER = /\p{Lu}/u;
@@ -25,10 +30,11 @@ const RE_LETTER = /\p{L}/u;
 
 /** Berilgan uzunlik uchun ruxsat etilgan sonlar soni (min, max). */
 export function digitBounds(length) {
-  const target = length * DIGIT_TARGET;
+  const minTarget = length * DIGIT_MIN_TARGET;
+  const maxTarget = length * DIGIT_MAX_TARGET;
   return {
-    minDigits: Math.max(0, Math.ceil(target) - TOLERANCE),
-    maxDigits: Math.min(length, Math.floor(target) + TOLERANCE),
+    minDigits: Math.max(1, Math.ceil(minTarget) - TOLERANCE),
+    maxDigits: Math.min(length - MIN_UPPER, Math.floor(maxTarget) + TOLERANCE),
   };
 }
 
@@ -61,8 +67,8 @@ export function analyzePassword(password) {
 
   const empty = length === 0;
   const onlyDigits = !empty && digits === length;
-  const hasUpper = upper > 0;                   // kamida bitta katta harf shart
-  const hasLower = lower > 0;                   // kichik harflar mumkin
+  const hasUpper = upper >= MIN_UPPER;          // kamida 3 ta katta harf shart
+  const hasLower = lower > 0;                   // kichik harflar ham bo'lishi mumkin
   const compositionOk = empty
     || (digits >= minDigits && digits <= maxDigits);
 
@@ -82,16 +88,14 @@ export function analyzePassword(password) {
     {
       code: 'upper',
       ok: empty ? null : hasUpper,
-      uz: 'Kamida bitta katta harf (A-Z)',
-      ru: 'Минимум одна заглавная буква (A-Z)',
+      uz: `Kamida ${MIN_UPPER} ta katta harf (A-Z) (hozir ${upper})`,
+      ru: `Минимум ${MIN_UPPER} заглавных буквы (A-Z) (сейчас ${upper})`,
     },
     {
       code: 'composition',
       ok: empty ? null : compositionOk,
-      uz: `${Math.round(DIGIT_TARGET * 100)}% son / ${Math.round(OTHER_TARGET * 100)}% harf va belgi `
-        + `(hozir ${digitPct}% / ${otherPct}%)`,
-      ru: `${Math.round(DIGIT_TARGET * 100)}% цифр / ${Math.round(OTHER_TARGET * 100)}% букв и символов `
-        + `(сейчас ${digitPct}% / ${otherPct}%)`,
+      uz: `60–70% harf va belgi / 30–40% son (hozir ${otherPct}% / ${digitPct}%)`,
+      ru: `60–70% букв и символов / 30–40% цифр (сейчас ${otherPct}% / ${digitPct}%)`,
     },
   ];
 
@@ -115,23 +119,23 @@ export function analyzePassword(password) {
   }
   if (onlyDigits) {
     res.code = 'PW_ONLY_DIGITS';
-    res.uz = 'Parol juda oson — faqat sonlardan iborat. Kamida bitta katta harf va biror belgi qo‘shing.';
-    res.ru = 'Пароль слишком простой — только цифры. Добавьте заглавную букву и символ.';
+    res.uz = `Parol juda oson — faqat sonlardan iborat. Kamida ${MIN_UPPER} ta katta harf va boshqa harflar qo‘shing.`;
+    res.ru = `Пароль слишком простой — только цифры. Добавьте минимум ${MIN_UPPER} заглавные буквы и другие символы.`;
     return res;
   }
   if (!hasUpper) {
     res.code = 'PW_UPPERCASE';
-    res.uz = 'Parolda kamida bitta katta harf (A-Z) bo‘lishi kerak.';
-    res.ru = 'В пароле должна быть хотя бы одна заглавная буква (A-Z).';
+    res.uz = `Parolda kamida ${MIN_UPPER} ta katta harf (A-Z) bo‘lishi kerak (hozir ${upper} ta).`;
+    res.ru = `В пароле должно быть минимум ${MIN_UPPER} заглавных буквы (A-Z) (сейчас ${upper}).`;
     return res;
   }
   if (!compositionOk) {
     res.code = 'PW_COMPOSITION';
-    res.uz = `Parol tarkibi noto‘g‘ri: ${Math.round(DIGIT_TARGET * 100)}% sonlar va `
-      + `${Math.round(OTHER_TARGET * 100)}% harf va belgilar kerak (hozir ${digitPct}% / ${otherPct}%). `
+    res.uz = `Parol tarkibi noto‘g‘ri: o‘rtacha 60–70% harf/belgi va 30–40% son bo‘lishi kerak `
+      + `(hozir ${otherPct}% harf / ${digitPct}% son). `
       + `${length} belgi uchun ${minDigits}–${maxDigits} son va ${minOthers}–${maxOthers} harf/belgi kerak.`;
-    res.ru = `Неверный состав пароля: нужно ${Math.round(DIGIT_TARGET * 100)}% цифр и `
-      + `${Math.round(OTHER_TARGET * 100)}% букв и символов (сейчас ${digitPct}% / ${otherPct}%). `
+    res.ru = `Неверный состав пароля: нужно в среднем 60–70% букв/символов и 30–40% цифр `
+      + `(сейчас ${otherPct}% букв / ${digitPct}% цифр). `
       + `Для ${length} символов нужно ${minDigits}–${maxDigits} цифр и ${minOthers}–${maxOthers} букв/символов.`;
     return res;
   }
