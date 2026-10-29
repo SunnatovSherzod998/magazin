@@ -40,6 +40,10 @@ export async function posPage(root) {
     uz() ? 'Skaner / SKU bo‘yicha qidiring · Enter — savatga qo‘shish'
          : 'Поиск по сканеру / артикулу · Enter — в корзину',
     btn(t('refresh'), { icon: '↻', onClick: () => load() }),
+    btn(uz() ? 'Yangi maxsulot qo‘shish' : 'Добавить товар', {
+      icon: '➕', cls: 'btn-outline', id: 'posAddProduct',
+      onClick: () => openAddProductModal(),
+    }),
   ));
 
   // -------------------------------------------------------------- layout
@@ -399,6 +403,100 @@ export async function posPage(root) {
       const b = document.getElementById('posSell');
       if (b) b.disabled = false;
     }
+  }
+
+    // -------------------------------------------------------------- yangi maxsulot qo'shish (POS'dan)
+  async function openAddProductModal() {
+    let units = [];
+    try {
+      const res = await api.get('/api/catalogs/units/options', { limit: 200 });
+      units = Array.isArray(res) ? res : [];
+    } catch { /* units ro'yxati topilmasa — shunchalik jo'natmaymiz */ }
+
+    const iSku = h('input', { type: 'text', placeholder: uz() ? 'SKU (masalan: A-001)' : 'Артикул (например: A-001)', class: 'fb-input' });
+    const iBarcode = h('input', { type: 'text', placeholder: uz() ? 'Barcode (sh trx kod)' : 'Штрих-код', class: 'fb-input' });
+    const iNameUz = h('input', { type: 'text', placeholder: uz() ? 'Nomi (o‘zbekcha)' : 'Название (узбекский)', class: 'fb-input' });
+    const iNameRu = h('input', { type: 'text', placeholder: uz() ? 'Nomi (ruscha)' : 'Название (русский)', class: 'fb-input' });
+    const iPrice = h('input', { type: 'number', min: '0', step: '0.01', value: '0', class: 'fb-input' });
+    const iUnit = h('select', { class: 'fb-select' },
+      h('option', { value: '', text: uz() ? 'Birlikni tanlang' : 'Выберите единицу' }),
+      ...units.map((u) => h('option', { value: u.id, text: fn(u, 'name_uz', 'name_ru') || u.code || 'Unit #' + u.id })));
+
+    const body = h('div', { class: 'form-grid', style: { gap: '10px' } },
+      h('div', {}, h('label', { text: uz() ? 'SKU / Артикул' : 'SKU / Артикул' }), iSku),
+      h('div', {}, h('label', { text: uz() ? 'Barcode' : 'Штрих-код' }), iBarcode),
+      h('div', {}, h('label', { text: uz() ? 'Nomi (o‘zbekcha)' : 'Название (узбекский)' }), iNameUz),
+      h('div', {}, h('label', { text: uz() ? 'Nomi (ruscha)' : 'Название (русский)' }), iNameRu),
+      h('div', {}, h('label', { text: uz() ? 'Birlik' : 'Единица измерения' }), iUnit),
+      h('div', {}, h('label', { text: uz() ? 'Sotish narxi' : 'Цена продажи' }), iPrice),
+    );
+
+    modal({
+      title: uz() ? 'Yangi maxsulot qo‘shish' : 'Добавить товар',
+      width: 560,
+      body,
+      actions: (close) => [
+        h('button', { class: 'btn', onclick: close, text: uz() ? 'Bekor qilish' : 'Отмена' }),
+        h('button', {
+          class: 'btn btn-primary',
+          text: uz() ? 'Saqlash va savatga qo‘shish' : 'Сохранить и в корзину',
+          onclick: async () => {
+            const sku = iSku.value.trim();
+            const barcode = iBarcode.value.trim();
+            const nameUz = iNameUz.value.trim();
+            const nameRu = iNameRu.value.trim();
+            const price = Number(iPrice.value) || 0;
+            const unit_id = iUnit.value || null;
+            if (!sku) {
+              toast(uz() ? 'SKU shart' : 'Артикул обязателен', 'err');
+              iSku.focus();
+              return;
+            }
+            if (!nameUz) {
+              toast(uz() ? 'Nomi (UZ) shart' : 'Название (UZ) обязательно', 'err');
+              iNameUz.focus();
+              return;
+            }
+            if (!nameRu) {
+              toast(uz() ? 'Nomi (RU) shart' : 'Название (RU) обязательно', 'err');
+              iNameRu.focus();
+              return;
+            }
+            try {
+              console.log('POST /api/catalogs/products body:', { sku, barcode, name_uz: nameUz, name_ru: nameRu, sale_price: price, unit_id });
+              const created = await api.post('/api/catalogs/products', {
+                sku, barcode, name_uz: nameUz, name_ru: nameRu, sale_price: price, unit_id,
+                is_active: 1, is_service: 0,
+              });
+              console.log('Created product:', created);
+              if (!created || !created.id) throw new Error(uz() ? 'Mahsulot yaratilmadi' : 'Товар не создан');
+              const unitObj = units.find((u) => u.id === created.unit_id);
+              const st = {
+                product_id: created.id,
+                sku: created.sku,
+                barcode: created.barcode,
+                name: fn(created, 'name_uz', 'name_ru') || nameUz,
+                image_url: created.image_url,
+                unit_code: unitObj ? unitObj.code : '',
+                sale_price: Number(created.sale_price) || 0,
+                qty: 0,
+              };
+              addToCart(st);
+              close();
+              fSearch.value = '';
+              state.q = '';
+              await load();
+              fSearch.focus();
+              toast(uz() ? 'Maxsulot qo‘shildi va savatga kiritildi' : 'Товар добавлен и в корзину');
+            } catch (e) {
+              console.error('openAddProductModal xato:', e);
+              toast(String(e.message || e) || (uz() ? 'Saqlashda xato yuz berdi' : 'Ошибка сохранения'), 'err');
+            }
+          },
+        }),
+      ],
+    });
+    iSku.focus();
   }
 
   const POS_NOTE = { CASH: 'Naqd to‘lov', CARD: 'Karta orqali', CREDIT: 'Naxa / qarzga sotuv' };

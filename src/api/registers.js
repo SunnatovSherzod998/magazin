@@ -95,7 +95,8 @@ async function register(router) {
          LEFT JOIN catalog_categories cat ON cat.id = p.category_id
          LEFT JOIN catalog_brands br ON br.id = p.brand_id
          ${w}
-         GROUP BY p.id
+         GROUP BY p.id, p.sku, p.barcode, p.name_ru, p.name_uz, p.image_url,
+                  u.code, u.name_ru, cat.name_ru, br.name_ru
          ${hv}
          ORDER BY p.sku LIMIT ?`,
       ...params, Math.min(Number(q.limit) || 500, 5000)

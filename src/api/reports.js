@@ -47,7 +47,7 @@ async function register(router) {
     const debtByParty = await all(
       `SELECT cp.name_ru, cp.name_uz, COALESCE(SUM(m.amount),0) AS amount
          FROM reg_debt_movements m JOIN catalog_counterparties cp ON cp.id = m.counterparty_id
-        GROUP BY m.counterparty_id ORDER BY ABS(SUM(m.amount)) DESC LIMIT 10`
+        GROUP BY cp.id, cp.name_ru, cp.name_uz ORDER BY ABS(SUM(m.amount)) DESC LIMIT 10`
     );
     const recent = await all(
       `SELECT d.id, d.type, d.number, d.date, d.status, d.total_amount, d.total_qty,
@@ -80,7 +80,7 @@ async function register(router) {
                AND substr(d.date, 1, 7) = ?
                 ${wh ? 'AND d.warehouse_id = ?' : ''}
         WHERE e.is_active = 1
-        GROUP BY e.id
+        GROUP BY e.id, e.name_uz, e.name_ru, e.position, e.sales_limit, e.bonus_percent, e.base_salary
         ORDER BY month_sales DESC
         LIMIT 10`,
       month, ...whArgs
@@ -144,7 +144,8 @@ async function register(router) {
          JOIN catalog_products p ON p.id = m.product_id
          LEFT JOIN catalog_units u ON u.id = p.unit_id
         WHERE m.date >= ? AND m.date <= ? ${wh ? 'AND m.warehouse_id = ?' : ''}
-        GROUP BY p.id HAVING sold_qty > 0
+        GROUP BY p.id, p.sku, p.name_ru, p.name_uz, u.code
+        HAVING SUM(CASE WHEN m.qty_out > 0 THEN m.qty_out ELSE 0 END) > 0
         ORDER BY revenue DESC LIMIT 500`,
       ...(wh ? [from, to, wh] : [from, to])
     );
@@ -240,7 +241,7 @@ async function register(router) {
          LEFT JOIN catalog_warehouses w ON w.id = d.warehouse_id
         WHERE d.type='ISSUE' AND d.status='POSTED' AND d.base_type <> 'SALE'
           AND d.date >= ? AND d.date <= ? ${wh ? 'AND d.warehouse_id = ?' : ''}
-        GROUP BY d.id, p.id
+        GROUP BY d.id, d.number, d.date, d.reason, w.name_ru, w.name_uz, p.sku, p.name_ru, p.name_uz, u.code
         ORDER BY d.date DESC LIMIT 1000`,
       ...(wh ? [from, to, wh] : [from, to])
     );

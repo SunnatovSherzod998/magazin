@@ -48,9 +48,16 @@ const SCHEMA_SQLITE = path.join(__dirname, 'schema.sql');
 const SCHEMA_PG = path.join(__dirname, 'schema.pg.sql');
 
 const PG_URL = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL || '';
-const PG_KEY = process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_KEY || '';
+const PG_KEY = process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_DATABASE_URL_KEY || '';
 const TURSO_URL = process.env.TURSO_DATABASE_URL || '';
 const TURSO_TOKEN = process.env.TURSO_AUTH_TOKEN || '';
+
+if (PG_URL && !/^postgres(ql)?:\/\//i.test(PG_URL)) {
+  console.error('\n[ERROR] SUPABASE_DATABASE_URL noto\'g\'ri formatda.');
+  console.error('         U "postgresql://" bilan boshlanishi kerak, hozirgi:', PG_URL);
+  console.error('         Supabase Dashboard → Settings → Database → Connection string (URI) dan nusxalang.\n');
+  process.exit(1);
+}
 
 const DRIVER = PG_URL ? 'postgres' : (TURSO_URL ? 'turso' : 'sqlite');
 
@@ -64,8 +71,10 @@ function toPg(sql) {
   // funksiyalar
   s = s.replace(/datetime\('now','localtime'\)/gi, 'CURRENT_TIMESTAMP');
   s = s.replace(/datetime\('now'\)/gi, 'CURRENT_TIMESTAMP');
-  s = s.replace(/date\('now',\s*'-\s*(\d+)\s+days'\)/gi, "(CURRENT_DATE - INTERVAL '$1 days')");
+  s = s.replace(/date\('now',\s*'-\s*(\d+)\s+days'\)/gi, "(CURRENT_DATE - INTERVAL '$1 days')::text");
   s = s.replace(/date\('now'\)/gi, 'CURRENT_DATE');
+  // substr(str, start, length) -> PostgreSQL substring(str FROM start FOR length)
+  s = s.replace(/substr\(\s*([^,]+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/gi, 'substring($1::text FROM $2 FOR $3)');
   s = s.replace(/INSERT\s+OR\s+IGNORE\s+INTO/gi, 'INSERT INTO');
   // placeholderlar: ? -> $1, $2, ...
   let n = 0;
@@ -85,9 +94,21 @@ function initDriver() {
     const pool = new Pool({
       connectionString: PG_URL,
       ssl: PG_URL.includes('localhost') || PG_URL.includes('127.0.0.1') ? false : { rejectUnauthorized: false },
-      max: 5,
+      max: process.env.VERCEL ? 1 : 5,
       idleTimeoutMillis: 10000,
+      connectionTimeoutMillis: 10000,
     });
+
+    // Ulanganini tekshirish
+    try {
+     pool.query('SELECT 1 AS ok');
+    } catch (e) {
+      console.error('\n[ERROR] Supabasega ulanishda xato:', e.message);
+      console.error('         Host/SSL/parolni tekshiring.');
+      console.error('         URL (parol yashirilgan):', PG_URL.replace(/:[^:@]+@/, ':***@'));
+      process.exit(1);
+    }
+
     drv = {
       kind: 'postgres',
       exec: async (sql) => { await pool.query(sql); },

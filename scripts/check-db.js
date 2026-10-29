@@ -1,10 +1,28 @@
 'use strict';
 const d = require('../src/db');
-d.init();
-const tables = d.all("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").map((r) => r.name);
-console.log('Jadvalar:', tables.join(', '));
-console.log('Omborlar:', d.get('SELECT COUNT(*) c FROM catalog_warehouses').c);
-console.log('Foydalanuvchilar:', d.get('SELECT COUNT(*) c FROM users').c);
-console.log('Valyutalar:', d.all('SELECT code, rate FROM catalog_currencies').map((c) => `${c.code}=${c.rate}`).join(' '));
-console.log('Joylashuvlar:', d.get('SELECT COUNT(*) c FROM catalog_locations').c);
-console.log('OK');
+
+(async () => {
+  await d.init();
+
+  if (d.driver() === 'postgres') {
+    const tables = await d.all(
+      "SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name"
+    );
+    console.log('Jadvalar:', tables.map((r) => r.table_name).join(', '));
+  } else {
+    const tables = await d.all("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name");
+    console.log('Jadvalar:', tables.map((r) => r.name).join(', '));
+  }
+
+  const wh = await d.get('SELECT COUNT(*) c FROM catalog_warehouses');
+  console.log('Omborlar:', wh?.c);
+
+  const us = await d.get('SELECT COUNT(*) c FROM users');
+  console.log('Foydalanuvchilar:', us?.c);
+
+  console.log('OK');
+  d.close();
+})().catch((e) => {
+  console.error('DB check xato:', e.message);
+  process.exit(1);
+});

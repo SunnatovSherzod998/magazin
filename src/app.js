@@ -34,7 +34,7 @@ function buildRouter() {
   router.get('/api/health', async () => ({
     ok: true,
     time: new Date().toISOString(),
-    storage: db.isRemote() ? 'turso' : 'local',
+    storage: db.driver(),
   }), { auth: false });
 
   return router;
@@ -76,7 +76,7 @@ async function handle(req, res) {
 
   // --- Rasmlar (serverlessda vaqtincha faylga yoziladi)
   if (pathname.startsWith('/uploads/')) {
-    const UPLOADS = process.env.OMBOR_UPLOADS || path.join(db.DATA_DIR, 'uploads');
+    const UPLOADS = process.env.OMBOR_DATA_DIROMBOR_DATA_DIR || path.join(db.DATA_DIR, 'uploads');
     fs.mkdirSync(UPLOADS, { recursive: true });
     if (serveStatic(UPLOADS, pathname.slice('/uploads'.length), res)) return;
     res.writeHead(404).end('404');

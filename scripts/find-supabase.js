@@ -1,6 +1,40 @@
+const fs = require('node:fs');
+const path = require('node:path');
 const { Client } = require('pg');
-const PW = 'COINAMI_009';
-const REF = 'afuxlveudhmatggpryzn.supabase.co';
+
+// .env faylidan kalitni o'qish
+function readEnv(key) {
+  try {
+    const envPath = path.join(__dirname, '..', '.env');
+    const content = fs.readFileSync(envPath, 'utf8');
+    for (const line of content.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eq = trimmed.indexOf('=');
+      if (eq > 0) {
+        const k = trimmed.slice(0, eq).trim();
+        if (k === key) {
+          let v = trimmed.slice(eq + 1).trim();
+          if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+            v = v.slice(1, -1);
+          }
+          return v;
+        }
+      }
+    }
+  } catch { /* skip */ }
+  return '';
+}
+
+// POSTGRES_URL / SUPABASE_DATABASE_URL dan parolni ajratish
+function extractPassword(url) {
+  const m = url.match(/:\/\/[^:]+:([^@]+)@/);
+  return m ? m[1] : '';
+}
+
+const envUrl = readEnv('SUPABASE_DATABASE_URL') || readEnv('POSTGRES_URL') || '';
+const PW = extractPassword(envUrl) || 'COINAMI_009';
+const REF = 'dejbmguyftmqkjhprrid';
 
 const REGIONS = [
   'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
@@ -12,11 +46,14 @@ const REGIONS = [
 
 // username variantlari
 const USERS = ['postgres', `postgres.${REF}`];
+
 const HOSTS = [];
 for (const r of REGIONS) {
   HOSTS.push(`aws-0-${r}.pooler.supabase.com`);
   HOSTS.push(`aws-1-${r}.pooler.supabase.com`);
 }
+// .env da bo'lgan direct hostni ham qo'shamiz
+HOSTS.push(`db.${REF}.supabase.co`);
 
 async function tryOne(url) {
   const c = new Client({ connectionString: url, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 8000 });

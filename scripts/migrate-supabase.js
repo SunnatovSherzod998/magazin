@@ -6,8 +6,16 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 // 1. Muhit parametrlarini o'rnatish
-const SUPABASE_URL = process.env.SUPABASE_DATABASE_URL
-  || 'postgresql://postgres.dejbmguyftmqkjhprrid:COINAMI_009@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres';
+const SUPABASE_URL = process.env.SUPABASE_DATABASE_URL || process.env.POSTGRES_URL || '';
+
+if (!SUPABASE_URL) {
+  console.error('[ERROR] SUPABASE_DATABASE_URL yoki POSTGRES_URL o\'rnatilmagan.');
+  process.exit(1);
+}
+if (!/^postgres(ql)?:\/\//i.test(SUPABASE_URL)) {
+  console.error('[ERROR] SUPABASE_DATABASE_URL "postgresql://" bilan boshlanishi kerak, hozirgi:', SUPABASE_URL);
+  process.exit(1);
+}
 
 process.env.SUPABASE_DATABASE_URL = SUPABASE_URL;
 
